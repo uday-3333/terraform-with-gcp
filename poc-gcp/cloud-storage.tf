@@ -9,7 +9,7 @@ resource "google_storage_bucket_object" "api_503" {
   for_each = { for k, s in local.sites : k => s if s.maintenance_mode }
 
   name         = "api-503.json"
-  bucket       = module.storage_buckets.bucket_names["${each.key}-maintenance"]
+  bucket       = module.storage_buckets.bucket_names["${each.value.lb_key}-maintenance"]
   content_type = "application/json"
   content = jsonencode({
     error   = "service_unavailable"

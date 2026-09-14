@@ -91,6 +91,10 @@ locals {
         enable_object_versioning    = false
         website                     = { main_page_suffix = "index.html" }
         labels                      = merge(local.common_labels, { name = "${local.storage_bucket_name_prefix}-${site.lb_key}-maintenance" })
+        use_authoritative_policy    = true
+        authoritative_policy_bindings = [
+          { role = "roles/storage.objectViewer", members = ["allUsers"] }
+        ]
       }
       if site.maintenance_mode
     }
