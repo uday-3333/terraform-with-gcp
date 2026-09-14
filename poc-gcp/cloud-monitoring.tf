@@ -20,7 +20,7 @@ module "cloud_monitoring" {
     cloud_run_alerts = true
     cloud_sql_alerts = false
     lb_alerts        = true  # Enable LB error rate (latency may need 10-15 min)
-    uptime_checks    = ["https://${local.environment}-enroll.test.com"]
+    uptime_checks    = ["https://opsnexus.blog"]
   }
 
   # Cloud Run services configuration
