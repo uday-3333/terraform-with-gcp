@@ -43,6 +43,10 @@ variable "buckets" {
       response_header = optional(list(string))
       max_age_seconds = optional(number)
     })), [])
+    website = optional(object({
+      main_page_suffix = optional(string)
+      not_found_page   = optional(string)
+    }))
     labels = optional(map(string), {})
     use_authoritative_policy = optional(bool, false)
     authoritative_policy_bindings = optional(list(object({

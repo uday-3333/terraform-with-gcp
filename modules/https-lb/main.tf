@@ -253,16 +253,46 @@ resource "google_compute_url_map" "https" {
     }
   }
 
-  # Build path matchers from services
   dynamic "path_matcher" {
     for_each = local.services_by_name
     content {
-      name            = "path-matcher-${path_matcher.value.name}"
-      default_service = google_compute_backend_service.cloud_run[path_matcher.value.name].id
+      name = "path-matcher-${path_matcher.value.name}"
+      default_service = (
+        var.maintenance_mode && length(var.gcs_backends) > 0
+        ? google_compute_backend_bucket.gcs[var.gcs_backends[0].name].id
+        : google_compute_backend_service.cloud_run[path_matcher.value.name].id
+      )
 
-      # Add path rules for this service if configured
+      # healthz always → Cloud Run (never blocked by maintenance)
       dynamic "path_rule" {
-        for_each = path_matcher.value.path_rules[*].paths
+        for_each = var.maintenance_mode && length(var.healthz_paths) > 0 ? [1] : []
+        content {
+          paths   = var.healthz_paths
+          service = google_compute_backend_service.cloud_run[var.cloud_run_services[0].name].id
+        }
+      }
+
+      # api paths always → Cloud Run (JSON response, not HTML maintenance page)
+      dynamic "path_rule" {
+        for_each = var.maintenance_mode && length(var.api_paths) > 0 ? [1] : []
+        content {
+          paths   = var.api_paths
+          service = google_compute_backend_service.cloud_run[var.cloud_run_services[0].name].id
+        }
+      }
+
+      # GCS path rules (maintenance page routing)
+      dynamic "path_rule" {
+        for_each = { for b in var.gcs_backends : b.name => b if length(b.path_rules) > 0 }
+        content {
+          paths   = flatten(path_rule.value.path_rules[*].paths)
+          service = google_compute_backend_bucket.gcs[path_rule.key].id
+        }
+      }
+
+      # Original per-service path rules (normal mode only)
+      dynamic "path_rule" {
+        for_each = var.maintenance_mode ? [] : path_matcher.value.path_rules[*].paths
         content {
           paths   = path_rule.value
           service = google_compute_backend_service.cloud_run[path_matcher.value.name].id
@@ -306,6 +336,19 @@ resource "google_compute_url_map" "http_redirect" {
     redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
     strip_query            = false
   }
+}
+
+# ============================================================================
+# GCS Backend Buckets (maintenance page / static assets)
+# ============================================================================
+
+resource "google_compute_backend_bucket" "gcs" {
+  for_each = { for b in var.gcs_backends : b.name => b }
+
+  name        = substr("${var.lb_name_prefix}-bkt-${each.value.name}", 0, 63)
+  project     = var.project_id
+  bucket_name = each.value.bucket_name
+  enable_cdn  = each.value.enable_cdn
 }
 
 # ============================================================================

@@ -400,3 +400,36 @@ variable "logging_sample_rate" {
     error_message = "logging_sample_rate must be between 0.0 and 1.0."
   }
 }
+
+# ============================================================================
+# Maintenance Mode Configuration
+# ============================================================================
+
+variable "maintenance_mode" {
+  description = "When true, routes /* to GCS maintenance backend. healthz_paths and api_paths always go to Cloud Run."
+  type        = bool
+  default     = false
+}
+
+variable "gcs_backends" {
+  description = "List of GCS bucket backends. Each entry creates a google_compute_backend_bucket and path rules in the URL map."
+  type = list(object({
+    name        = string
+    bucket_name = string
+    enable_cdn  = optional(bool, false)
+    path_rules  = optional(list(object({ paths = list(string) })), [])
+  }))
+  default = []
+}
+
+variable "healthz_paths" {
+  description = "Paths always routed to Cloud Run regardless of maintenance_mode."
+  type        = list(string)
+  default     = ["/healthz", "/healthz/*"]
+}
+
+variable "api_paths" {
+  description = "API paths always routed to Cloud Run regardless of maintenance_mode."
+  type        = list(string)
+  default     = ["/api", "/api/*"]
+}
