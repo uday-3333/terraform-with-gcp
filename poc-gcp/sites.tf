@@ -20,6 +20,18 @@ locals {
       enable_extension   = false  # flip to true to activate Option B (Service Extension)
       admin_bypass_cidrs = []     # CIDRs that always bypass maintenance e.g. ["203.0.113.10/32"]
       test_tenant_host   = ""     # host header that always bypasses maintenance
+
+      # Path redirects: redirect from_paths to a new path or host (no backend needed)
+      # response_code: MOVED_PERMANENTLY_DEFAULT (301), FOUND (302), TEMPORARY_REDIRECT (307), PERMANENT_REDIRECT (308)
+      redirects = [
+        { from_paths = ["/old", "/old/*"], to_path = "/new", response_code = "MOVED_PERMANENTLY_DEFAULT" },
+        { from_paths = ["/blog"], to_host = "blog.opsnexus.blog", response_code = "FOUND" },
+      ]
+
+      # Vanity domains: extra hostnames served by this site's LB
+      # redirect_to: 301 redirect to another host (e.g. www → apex)
+      # cloud_run_key: serve same or different Cloud Run app on this vanity host
+      vanity_domains = []
     }
 
     # ----------------------------------------------------------------
@@ -36,6 +48,8 @@ locals {
     #   enable_extension   = false
     #   admin_bypass_cidrs = []
     #   test_tenant_host   = ""
+    #   redirects          = []
+    #   vanity_domains     = []
     # }
   }
 }

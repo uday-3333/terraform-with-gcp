@@ -128,7 +128,7 @@ resource "google_certificate_manager_dns_authorization" "domain_auth" {
 # Certificate Manager certificate references all requested domains and the
 # corresponding DNS authorizations.
 resource "google_certificate_manager_certificate" "https" {
-  name    = substr("${var.lb_name_prefix}-cm-cert", 0, 63)
+  name    = substr("${var.lb_name_prefix}-cm-cert-${substr(md5(join(",", sort(var.domain_names))), 0, 6)}", 0, 63)
   project = var.project_id
 
   managed {
@@ -137,6 +137,10 @@ resource "google_certificate_manager_certificate" "https" {
       for domain in sort(keys(google_certificate_manager_dns_authorization.domain_auth)) :
       google_certificate_manager_dns_authorization.domain_auth[domain].id
     ]
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -243,6 +247,16 @@ resource "google_compute_url_map" "https" {
     }
   }
 
+  # Vanity redirect host rules (redirect_to only — cloud_run_key vanity domains
+  # are handled via cloud_run_services host_rules in locals.tf)
+  dynamic "host_rule" {
+    for_each = { for v in var.vanity_domains : v.domain => v if v.redirect_to != null }
+    content {
+      hosts        = [host_rule.key]
+      path_matcher = trimsuffix(substr("path-matcher-vanity-${replace(host_rule.key, ".", "-")}", 0, 63), "-")
+    }
+  }
+
   # Add a wildcard host rule when path-only services are present.
   # This ensures path-only service definitions are always reachable.
   dynamic "host_rule" {
@@ -262,6 +276,20 @@ resource "google_compute_url_map" "https" {
         ? google_compute_backend_bucket.gcs[var.gcs_backends[0].name].id
         : google_compute_backend_service.cloud_run[path_matcher.value.name].id
       )
+
+      # Redirect path rules (run before maintenance/normal rules)
+      dynamic "path_rule" {
+        for_each = { for idx, r in var.redirects : tostring(idx) => r }
+        content {
+          paths = path_rule.value.from_paths
+          url_redirect {
+            host_redirect          = path_rule.value.to_host
+            path_redirect          = path_rule.value.to_path
+            redirect_response_code = path_rule.value.response_code
+            strip_query            = path_rule.value.strip_query
+          }
+        }
+      }
 
       # healthz always → Cloud Run (never blocked by maintenance)
       dynamic "path_rule" {
@@ -313,6 +341,24 @@ resource "google_compute_url_map" "https" {
         content {
           paths   = path_rule.value.paths
           service = google_compute_backend_service.cloud_run[path_rule.value.service_name].id
+        }
+      }
+    }
+  }
+
+  # Path matchers for vanity domains that are pure redirects (redirect_to set, no cloud_run_key)
+  dynamic "path_matcher" {
+    for_each = { for v in var.vanity_domains : v.domain => v if v.redirect_to != null }
+    content {
+      name            = trimsuffix(substr("path-matcher-vanity-${replace(path_matcher.key, ".", "-")}", 0, 63), "-")
+      default_service = google_compute_backend_service.cloud_run[var.cloud_run_services[0].name].id
+
+      path_rule {
+        paths = ["/*", "/"]
+        url_redirect {
+          host_redirect          = path_matcher.value.redirect_to
+          redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
+          strip_query            = false
         }
       }
     }

@@ -106,20 +106,48 @@ locals {
   cloud_https_lb_configs = {
     for site_key, site in local.sites :
     "${site.lb_key}" => {
-      domain_names     = [site.domain]
+      # Primary domain + all vanity domains that are NOT pure redirects get a cert entry
+      domain_names = concat(
+        [site.domain],
+        [for v in site.vanity_domains : v.domain]
+      )
+
       maintenance_mode = site.maintenance_mode
       healthz_paths    = ["/healthz", "/healthz/*"]
       api_paths        = ["/api", "/api/*"]
+      redirects        = site.redirects
 
-      cloud_run_services = [
-        {
-          name                     = site_key
-          cloud_run_service_name   = module.cloud_run.service_names[site.cloud_run_key]
-          cloud_run_service_region = local.region
-          security_policy          = module.cloud_armor.policy_ids[site.armor_policy_key]
-          host_rules               = [{ hosts = [site.domain] }]
+      # Vanity domains that serve a Cloud Run backend (not pure redirects)
+      vanity_domains = [
+        for v in site.vanity_domains : {
+          domain        = v.domain
+          cloud_run_key = try(v.cloud_run_key, null)
+          redirect_to   = try(v.redirect_to, null)
         }
       ]
+
+      cloud_run_services = concat(
+        [
+          {
+            name                     = site_key
+            cloud_run_service_name   = module.cloud_run.service_names[site.cloud_run_key]
+            cloud_run_service_region = local.region
+            security_policy          = module.cloud_armor.policy_ids[site.armor_policy_key]
+            host_rules               = [{ hosts = [site.domain] }]
+          }
+        ],
+        # Extra Cloud Run entries for vanity domains pointing to a different cloud_run_key
+        [
+          for v in site.vanity_domains : {
+            name                     = trimsuffix(substr("vanity-${replace(v.domain, ".", "-")}", 0, 63), "-")
+            cloud_run_service_name   = module.cloud_run.service_names[v.cloud_run_key]
+            cloud_run_service_region = local.region
+            security_policy          = module.cloud_armor.policy_ids[site.armor_policy_key]
+            host_rules               = [{ hosts = [v.domain] }]
+          }
+          if try(v.cloud_run_key, null) != null
+        ]
+      )
 
       gcs_backends = site.maintenance_mode ? [
         {

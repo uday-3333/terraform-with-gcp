@@ -433,3 +433,57 @@ variable "api_paths" {
   type        = list(string)
   default     = ["/api", "/api/*"]
 }
+
+# ============================================================================
+# Redirects Configuration
+# ============================================================================
+
+variable "redirects" {
+  description = "Path-level redirects. Each entry redirects from_paths to a new path or host."
+  type = list(object({
+    from_paths    = list(string)
+    to_path       = optional(string)
+    to_host       = optional(string)
+    response_code = optional(string, "MOVED_PERMANENTLY_DEFAULT")
+    strip_query   = optional(bool, false)
+  }))
+  default = []
+
+  validation {
+    condition = alltrue([
+      for r in var.redirects :
+      r.to_path != null || r.to_host != null
+    ])
+    error_message = "Each redirect must set at least one of to_path or to_host."
+  }
+
+  validation {
+    condition = alltrue([
+      for r in var.redirects :
+      contains(["MOVED_PERMANENTLY_DEFAULT", "FOUND", "TEMPORARY_REDIRECT", "PERMANENT_REDIRECT"], r.response_code)
+    ])
+    error_message = "redirect response_code must be one of: MOVED_PERMANENTLY_DEFAULT, FOUND, TEMPORARY_REDIRECT, PERMANENT_REDIRECT."
+  }
+}
+
+# ============================================================================
+# Vanity Domains Configuration
+# ============================================================================
+
+variable "vanity_domains" {
+  description = "Extra hostnames on this LB. redirect_to performs a 301 host redirect; cloud_run_key routes to a Cloud Run backend."
+  type = list(object({
+    domain        = string
+    redirect_to   = optional(string)
+    cloud_run_key = optional(string)
+  }))
+  default = []
+
+  validation {
+    condition = alltrue([
+      for v in var.vanity_domains :
+      v.redirect_to != null || v.cloud_run_key != null
+    ])
+    error_message = "Each vanity_domain must set either redirect_to or cloud_run_key."
+  }
+}

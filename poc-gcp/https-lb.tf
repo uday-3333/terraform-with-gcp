@@ -9,6 +9,8 @@ module "cloud_https_lbs" {
   maintenance_mode = each.value.maintenance_mode
   healthz_paths    = each.value.healthz_paths
   api_paths        = each.value.api_paths
+  redirects        = each.value.redirects
+  vanity_domains   = each.value.vanity_domains
 
   cloud_run_services = each.value.cloud_run_services
   gcs_backends       = each.value.gcs_backends
