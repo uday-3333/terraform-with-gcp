@@ -96,7 +96,6 @@ locals {
           { role = "roles/storage.objectViewer", members = ["allUsers"] }
         ]
       }
-      if site.maintenance_mode
     }
   )
 
@@ -149,14 +148,14 @@ locals {
         ]
       )
 
-      gcs_backends = site.maintenance_mode ? [
+      gcs_backends = [
         {
           name        = "${site.lb_key}-maintenance"
           bucket_name = module.storage_buckets.bucket_names["${site.lb_key}-maintenance"]
           enable_cdn  = false
-          path_rules  = [{ paths = ["/*", "/"] }]
+          path_rules  = site.maintenance_mode ? [{ paths = ["/*", "/"] }] : []
         }
-      ] : []
+      ]
     }
   }
 }
