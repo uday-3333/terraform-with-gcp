@@ -16,7 +16,7 @@ locals {
       cloud_run_image    = "us-docker.pkg.dev/cloudrun/container/hello"
       container_port     = 8080
       armor_policy_key   = "allow_corp_and_partners"
-      maintenance_mode   = true   # flip to true to activate maintenance page
+      maintenance_mode   = false   # flip to true to activate maintenance page
       enable_extension   = false  # flip to true to activate Option B (Service Extension)
       admin_bypass_cidrs = []     # CIDRs that always bypass maintenance e.g. ["203.0.113.10/32"]
       test_tenant_host   = ""     # host header that always bypasses maintenance
