@@ -31,3 +31,13 @@ resource "google_project_iam_member" "cloud_run_roles" {
   role    = each.value
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
+
+# Grant the shared Cloud Run SA read access to the static-config bucket so the
+# decision callout service can read maintenance/, redirects/, and vanities/ configs.
+resource "google_storage_bucket_iam_member" "callout_gcs_reader" {
+  bucket = module.storage_buckets.bucket_names["static-config"]
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+
+  depends_on = [module.storage_buckets]
+}

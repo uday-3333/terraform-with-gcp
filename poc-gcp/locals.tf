@@ -54,19 +54,52 @@ locals {
 
   # ========================================
   # Derived: Cloud Run services (one per site)
+  # Decision callout services are added for sites with enable_extension = true.
+  # The decision service implements the Envoy External Processing gRPC API,
+  # reads ops-config from GCS (maintenance/, redirects/, vanities/ prefixes
+  # inside the static-config bucket) and returns routing decisions to the LB.
   # ========================================
-  cloud_run_services = {
-    for site_key, site in local.sites :
-    site.cloud_run_key => {
-      service_name           = "${local.cloud_run_name_prefix}-${site.cloud_run_key}"
-      service_account_email  = google_service_account.cloud_run_sa.email
-      container_image        = site.cloud_run_image
-      container_port         = site.container_port
-      startup_probe_enabled  = false
-      liveness_probe_enabled = false
-      labels                 = merge(local.common_labels, { name = "${local.cloud_run_name_prefix}-${site.cloud_run_key}" })
+  cloud_run_services = merge(
+    {
+      for site_key, site in local.sites :
+      site.cloud_run_key => {
+        service_name           = "${local.cloud_run_name_prefix}-${site.cloud_run_key}"
+        service_account_email  = google_service_account.cloud_run_sa.email
+        container_image        = site.cloud_run_image
+        container_port         = site.container_port
+        startup_probe_enabled  = false
+        liveness_probe_enabled = false
+        labels                 = merge(local.common_labels, { name = "${local.cloud_run_name_prefix}-${site.cloud_run_key}" })
+      }
+    },
+    # Decision callout service — one per extension-enabled site
+    # Replace container_image with your real gRPC callout image before enabling.
+    {
+      for site_key, site in local.sites :
+      "${site_key}-decision" => {
+        service_name          = "${local.cloud_run_name_prefix}-${site_key}-decision"
+        service_account_email = google_service_account.cloud_run_sa.email
+        # Image built by Cloud Build — pinned to immutable digest for reproducible deployments.
+        # To rebuild: gcloud builds submit --config callout-service/cloudbuild.yaml callout-service/
+        container_image       = "gcr.io/project-19604615-6ee6-45bb-b61/maintenance-callout@sha256:417fcd55de3a67b5b5988c85993d619a3633ccb9b3b52f893799ea842f304dd3"
+        container_port        = 8080
+        grpc_enabled          = true   # sets port name to h2c (HTTP/2 cleartext) for gRPC
+        cpu_throttling        = false  # always-on CPU for consistent low latency
+        min_instances         = 2      # keep warm — cold starts add latency to every request
+        max_instances         = 20
+        startup_probe_enabled   = false
+        liveness_probe_enabled  = false
+        readiness_probe_enabled = false
+        environment_variables = {
+          GCS_BUCKET         = "${local.storage_bucket_name_prefix}-static-config"
+          GCS_FOLDER_PREFIX  = "maintenance"
+          CONFIG_TTL_SECONDS = "5"
+        }
+        labels = merge(local.common_labels, { name = "${local.cloud_run_name_prefix}-${site_key}-decision" })
+      }
+      if site.enable_extension
     }
-  }
+  )
 
   # ========================================
   # Derived: Storage buckets
@@ -76,9 +109,10 @@ locals {
   storage_buckets = merge(
     {
       "static-config" = {
-        name     = "${local.storage_bucket_name_prefix}-static-config"
-        location = local.region
-        labels   = merge(local.common_labels, { name = "${local.storage_bucket_name_prefix}-static-config" })
+        name          = "${local.storage_bucket_name_prefix}-static-config"
+        location      = local.region
+        force_destroy = true
+        labels        = merge(local.common_labels, { name = "${local.storage_bucket_name_prefix}-static-config" })
       }
     },
     {

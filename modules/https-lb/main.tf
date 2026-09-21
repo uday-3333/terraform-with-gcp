@@ -364,7 +364,10 @@ resource "google_compute_url_map" "https" {
     }
   }
 
-  depends_on = [google_compute_backend_service.cloud_run]
+  depends_on = [
+    google_compute_backend_service.cloud_run,
+    google_compute_backend_bucket.gcs,
+  ]
 }
 
 # ============================================================================
