@@ -1,0 +1,8 @@
+[
+  { "headerKey": "strict-transport-security", "headerValue": "max-age=31536000; includeSubDomains" },
+  { "headerKey": "x-content-type-options",    "headerValue": "nosniff" },
+  { "headerKey": "x-frame-options",           "headerValue": "SAMEORIGIN" },
+  { "headerKey": "referrer-policy",           "headerValue": "strict-origin-when-cross-origin" },
+  { "headerKey": "permissions-policy",        "headerValue": "geolocation=(), microphone=(), camera=()" },
+  { "headerKey": "cache-control",             "headerValue": "no-cache, no-store, must-revalidate" }
+]

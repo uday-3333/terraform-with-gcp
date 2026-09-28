@@ -15,6 +15,7 @@ module "storage_buckets" {
 # maintenance/redirects.json    ← regex-based redirect rules (requires callout service)
 # maintenance/vanities.json     ← exact-path vanity URL mappings (requires callout service)
 # maintenance/maintenance.html  ← HTML page served to users during maintenance
+# maintenance/http_headers.json ← security response headers injected on every response
 
 resource "google_storage_bucket_object" "maintenance_config" {
   name         = "maintenance/maintenance.json"
@@ -55,35 +56,12 @@ resource "google_storage_bucket_object" "maintenance_html" {
   HTML
 }
 
-# index.html served to users by the GCS backend bucket during maintenance (one per site)
-resource "google_storage_bucket_object" "maintenance_index_html" {
-  for_each = { for k, s in local.sites : k => s }
-
-  name         = "index.html"
-  bucket       = module.storage_buckets.bucket_names["${each.value.lb_key}-maintenance"]
-  content_type = "text/html"
-  content      = <<-HTML
-    <!DOCTYPE html>
-    <html lang="en">
-    <head><meta charset="UTF-8"><title>Maintenance</title>
-    <style>body{font-family:sans-serif;text-align:center;padding:80px;background:#f5f5f5}
-    h1{color:#333}p{color:#666}</style></head>
-    <body><h1>Scheduled Maintenance</h1>
-    <p>We are currently performing scheduled maintenance. Please check back shortly.</p>
-    </body></html>
-  HTML
-}
-
-# api-503.json served to API clients during maintenance (one per site, only when maintenance_mode = true)
-resource "google_storage_bucket_object" "api_503" {
-  for_each = { for k, s in local.sites : k => s if s.maintenance_mode }
-
-  name         = "api-503.json"
-  bucket       = module.storage_buckets.bucket_names["${each.value.lb_key}-maintenance"]
+resource "google_storage_bucket_object" "http_headers_config" {
+  name         = "maintenance/http_headers.json"
+  bucket       = module.storage_buckets.bucket_names["static-config"]
   content_type = "application/json"
-  content = jsonencode({
-    error   = "service_unavailable"
-    message = "The service is temporarily unavailable for maintenance. Please try again later."
-    code    = 503
-  })
+  # Format: [{"headerKey": "x-frame-options", "headerValue": "SAMEORIGIN"}]
+  source = "${path.module}/../callout-service/http_headers.json"
 }
+
+

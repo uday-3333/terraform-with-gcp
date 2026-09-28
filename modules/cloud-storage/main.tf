@@ -103,14 +103,6 @@ resource "google_storage_bucket" "buckets" {
     }
   }
 
-  dynamic "website" {
-    for_each = each.value.website != null ? [each.value.website] : []
-    content {
-      main_page_suffix = try(website.value.main_page_suffix, null)
-      not_found_page   = try(website.value.not_found_page, null)
-    }
-  }
-
   labels = each.value.labels
 }
 
